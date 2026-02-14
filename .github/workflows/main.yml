@@ -1,9 +1,7 @@
-name: macOS CI on Apple Silicon M4 (Sequoia) with VNC & Tailscale
+name: macOS CI with Tailscale & VNC
 
 on:
   push:
-    branches: [ "main" ]
-  pull_request:
     branches: [ "main" ]
 
 jobs:
@@ -11,38 +9,37 @@ jobs:
     runs-on: getmac-m4-sequoia
 
     env:
-      GETMAC_VNC: enabled                  # فعال کردن VNC
-      VNC_PASSWORD: ${{ secrets.VNC_PASSWORD }} # رمز عبور امن برای VNC
-      TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }} # Auth key برای اتصال به Tailscale
+      TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
+      VNC_PASSWORD: ${{ secrets.samiyarbig }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Show system info
+      - name: Install Tailscale
         run: |
-          echo "Running on Mac mini M4 with macOS 15 Sequoia"
-          system_profiler SPHardwareDataType
-          sw_vers
-
-      - name: Install dependencies
-        run: |
-          brew update
-          brew install cocoapods swiftlint tailscale
-
-      - name: Start Tailscale
-        run: |
+          brew install --cask tailscale
           sudo tailscale up --authkey $TAILSCALE_AUTHKEY
-          echo "Tailscale connected with IP:"
-          tailscale ip -4
+          echo "Tailscale is up!"
 
-      - name: Enable VNC (Screen Sharing)
+      - name: Check Tailscale status
+        run: |
+          tailscale status
+          tailscale ip -4
+          tailscale ping 100.64.0.1 || echo "Ping test failed"
+
+      - name: Enable VNC
         run: |
           sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
                -activate -configure -access -on -users $USER -privs -all -restart -agent
           sudo defaults write /Library/Preferences/com.apple.RemoteManagement VNCAlwaysStartOnConsole -bool true
-          echo $VNC_PASSWORD | sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -configure -clientopts -setvnclegacy -vnclegacy yes -setvncpw
           sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -restart -agent
+          echo "VNC password set to $VNC_PASSWORD"
+
+      - name: Show Tailscale IP for VNC
+        run: |
+          echo "Connect to VNC using the following Tailscale IP:"
+          tailscale ip -4
 
       - name: Build project
         run: xcodebuild -scheme MyApp -workspace MyApp.xcworkspace -sdk macosx clean build
