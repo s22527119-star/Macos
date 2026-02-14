@@ -1,0 +1,43 @@
+name: macOS CI on Apple Silicon M4 (Sequoia) with VNC
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: getmac-m4-sequoia   # label دقیق از GetMac
+
+    env:
+      GETMAC_VNC: enabled
+      VNC_PASSWORD: ${{ secrets.VNC_PASSWORD }}
+      VNC_IP: ${{ secrets.VNC_IP }}     # اگر GetMac IP ثابت یا VPN داری
+      VNC_PORT: 5900                    # پورت پیش‌فرض VNC
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Show system info
+        run: |
+          echo "Running on Mac mini M4 with macOS 15 Sequoia"
+          system_profiler SPHardwareDataType
+          sw_vers
+
+      - name: Install dependencies
+        run: |
+          brew update
+          brew install cocoapods swiftlint
+
+      - name: Build project
+        run: xcodebuild -scheme MyApp -workspace MyApp.xcworkspace -sdk macosx clean build
+
+      - name: Run tests
+        run: xcodebuild test -scheme MyApp -workspace MyApp.xcworkspace -destination 'platform=macOS,arch=arm64'
+
+      - name: Print VNC info
+        run: |
+          echo "Connect to VNC using:"
+          echo "IP: $VNC_IP"
+          echo "Port: $VNC_PORT"
+          echo "Password: $VNC_PASSWORD"
