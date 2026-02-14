@@ -1,0 +1,51 @@
+name: macOS CI on Apple Silicon M4 (Sequoia) with VNC & Tailscale
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: getmac-m4-sequoia
+
+    env:
+      GETMAC_VNC: enabled                  # فعال کردن VNC
+      VNC_PASSWORD: ${{ secrets.VNC_PASSWORD }} # رمز عبور امن برای VNC
+      TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }} # Auth key برای اتصال به Tailscale
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Show system info
+        run: |
+          echo "Running on Mac mini M4 with macOS 15 Sequoia"
+          system_profiler SPHardwareDataType
+          sw_vers
+
+      - name: Install dependencies
+        run: |
+          brew update
+          brew install cocoapods swiftlint tailscale
+
+      - name: Start Tailscale
+        run: |
+          sudo tailscale up --authkey $TAILSCALE_AUTHKEY
+          echo "Tailscale connected with IP:"
+          tailscale ip -4
+
+      - name: Enable VNC (Screen Sharing)
+        run: |
+          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
+               -activate -configure -access -on -users $USER -privs -all -restart -agent
+          sudo defaults write /Library/Preferences/com.apple.RemoteManagement VNCAlwaysStartOnConsole -bool true
+          echo $VNC_PASSWORD | sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -configure -clientopts -setvnclegacy -vnclegacy yes -setvncpw
+          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -restart -agent
+
+      - name: Build project
+        run: xcodebuild -scheme MyApp -workspace MyApp.xcworkspace -sdk macosx clean build
+
+      - name: Run tests
+        run: xcodebuild test -scheme MyApp -workspace MyApp.xcworkspace -destination 'platform=macOS,arch=arm64'
