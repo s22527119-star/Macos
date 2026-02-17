@@ -1,0 +1,31 @@
+name: MacOS Headless Display with Mouse and Keyboard
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Setup Headless Display
+        uses: pyvista/setup-headless-display-action@v4.2
+
+      - name: Install dependencies
+        run: |
+          brew install xquartz
+          brew install python3
+
+      - name: Enable Mouse and Keyboard
+        run: |
+          sudo defaults write /Library/Preferences/com.apple.driver.AppleHIDMouse Button1 -int 1
+          sudo defaults write /Library/Preferences/com.apple.driver.AppleHIDKeyboard EnableKeyRepeat -bool true
+
+      - name: Run tests or commands
+        run: |
+          python3 -m unittest discover
