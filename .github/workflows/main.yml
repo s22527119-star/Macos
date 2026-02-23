@@ -1,48 +1,52 @@
-name: macOS CI with Tailscale & VNC
-
-on:
-  push:
-    branches: [ "main" ]
+name: macOS Remote Desktop
+on: workflow_dispatch
 
 jobs:
-  build:
-    runs-on: getmac-m4-sequoia
-
-    env:
-      TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
-      VNC_PASSWORD: ${{ secrets.samiyarbig }}
-
+  macos:
+    name: "Run on the fastest infrastructure"
+    runs-on: ghcr.io/cirruslabs/macos-runner:tahoe-xl
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install Tailscale
+      - uses: actions/checkout@v4
+      
+      - name: Select Xcode 16.2
         run: |
-          brew install --cask tailscale
-          sudo tailscale up --authkey $TAILSCALE_AUTHKEY
-          echo "Tailscale is up!"
+          xcodes installed
+          sudo xcodes select 16.2
 
-      - name: Check Tailscale status
+      - name: Setup VNC and Web Access
         run: |
-          tailscale status
-          tailscale ip -4
-          tailscale ping 100.64.0.1 || echo "Ping test failed"
+          # 1. فعال‌سازی Screen Sharing در مک
+          sudo /usr/libexec/PlistBuddy -c "Set :com.apple.screensharing.agent:set-resolutions:0:width 1280" /Library/Preferences/com.apple.RemoteManagement.plist
+          sudo /usr/libexec/PlistBuddy -c "Set :com.apple.screensharing.agent:set-resolutions:0:height 800" /Library/Preferences/com.apple.RemoteManagement.plist
+          sudo launchctl load -w /System/Library/LaunchDaemons/com.apple.screensharing.plist
+          
+          # تنظیم رمز عبور برای VNC (رمز: 123456)
+          sudo /usr/libexec/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -configure -allowAccessFor -allUsers -privs -all
+          sudo /usr/libexec/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -configure -clientopts -setvncprinting -vncprinting yes
+          sudo /usr/libexec/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -configure -clientopts -setvncpw -vncpw 123456
+          sudo /usr/libexec/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -restart -agent
 
-      - name: Enable VNC
+      - name: Install noVNC and Cloudflare
         run: |
-          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
-               -activate -configure -access -on -users $USER -privs -all -restart -agent
-          sudo defaults write /Library/Preferences/com.apple.RemoteManagement VNCAlwaysStartOnConsole -bool true
-          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -restart -agent
-          echo "VNC password set to $VNC_PASSWORD"
-
-      - name: Show Tailscale IP for VNC
+          brew install novnc cloudflare/cloudflare/cloudflared
+          
+      - name: Start noVNC and Cloudflare Tunnel
         run: |
-          echo "Connect to VNC using the following Tailscale IP:"
-          tailscale ip -4
-
-      - name: Build project
-        run: xcodebuild -scheme MyApp -workspace MyApp.xcworkspace -sdk macosx clean build
-
-      - name: Run tests
-        run: xcodebuild test -scheme MyApp -workspace MyApp.xcworkspace -destination 'platform=macOS,arch=arm64'
+          # اجرای noVNC به صورت Background (پل بین VNC و WebSocket)
+          # پورت پیش‌فرض VNC مک 5900 است که روی پورت 6080 وب می‌آید
+          websockify --web /usr/local/share/novnc --detach 6080 localhost:5900
+          
+          # ایجاد تونل کلودفلر برای پورت 6080
+          echo "Connecting to Cloudflare..."
+          cloudflared tunnel --url http://localhost:6080 &
+          
+          # صبر برای ایجاد لینک
+          sleep 10
+          
+      - name: Keep Alive
+        run: |
+          echo "Access your macOS via the Cloudflare URL above."
+          echo "VNC Password is: 123456"
+          # این دستور باعث می‌شود Runner بسته نشود (تا 6 ساعت)
+          sleep 21600 
+          
