@@ -1,52 +1,49 @@
-name: macOS Remote Desktop
+name: macOS Remote Access (Low-priority)
 on: workflow_dispatch
 
 jobs:
-  macos:
-    name: "Run on the fastest infrastructure"
-    runs-on: ghcr.io/cirruslabs/macos-runner:tahoe-xl
+  tests:
+    name: "PR Validation"
+    # ترکیب Tahoe-XL و اولویت پایین در یک لیست
+    runs-on: ["ghcr.io/cirruslabs/macos-runner:tahoe-xl", "low-priority"]
+    
     steps:
-      - uses: actions/checkout@v4
-      
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
       - name: Select Xcode 16.2
         run: |
           xcodes installed
           sudo xcodes select 16.2
 
-      - name: Setup VNC and Web Access
+      - name: Enable macOS Screen Sharing
         run: |
-          # 1. فعال‌سازی Screen Sharing در مک
-          sudo /usr/libexec/PlistBuddy -c "Set :com.apple.screensharing.agent:set-resolutions:0:width 1280" /Library/Preferences/com.apple.RemoteManagement.plist
-          sudo /usr/libexec/PlistBuddy -c "Set :com.apple.screensharing.agent:set-resolutions:0:height 800" /Library/Preferences/com.apple.RemoteManagement.plist
-          sudo launchctl load -w /System/Library/LaunchDaemons/com.apple.screensharing.plist
-          
-          # تنظیم رمز عبور برای VNC (رمز: 123456)
-          sudo /usr/libexec/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -configure -allowAccessFor -allUsers -privs -all
+          # فعال‌سازی سرویس VNC و تنظیم دسترسی کامل
+          sudo /usr/libexec/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -activate -configure -access -on -restart -agent -privs -all
+          # تنظیم رمز عبور VNC روی 1234
           sudo /usr/libexec/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -configure -clientopts -setvncprinting -vncprinting yes
-          sudo /usr/libexec/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -configure -clientopts -setvncpw -vncpw 123456
-          sudo /usr/libexec/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -restart -agent
+          sudo /usr/libexec/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -configure -clientopts -setvncpw -vncpw 1234
 
-      - name: Install noVNC and Cloudflare
+      - name: Install noVNC and Cloudflared
         run: |
-          brew install novnc cloudflare/cloudflare/cloudflared
-          
-      - name: Start noVNC and Cloudflare Tunnel
+          brew install novnc cloudflared
+
+      - name: Start Web Tunnel (noVNC + Cloudflare)
         run: |
-          # اجرای noVNC به صورت Background (پل بین VNC و WebSocket)
-          # پورت پیش‌فرض VNC مک 5900 است که روی پورت 6080 وب می‌آید
-          websockify --web /usr/local/share/novnc --detach 6080 localhost:5900
+          # اجرای پل ارتباطی VNC به وب در پورت 6080
+          websockify --web /usr/local/share/novnc/ --detach 6080 localhost:5900
           
-          # ایجاد تونل کلودفلر برای پورت 6080
-          echo "Connecting to Cloudflare..."
-          cloudflared tunnel --url http://localhost:6080 &
+          # ایجاد تونل کلودفلر برای دسترسی از راه دور
+          echo "--- LOOK FOR CLOUDFLARE URL BELOW ---"
+          cloudflared tunnel --url http://localhost:6080 & 
           
-          # صبر برای ایجاد لینک
-          sleep 10
-          
-      - name: Keep Alive
+          # توقف کوتاه برای اطمینان از بالا آمدن تونل
+          sleep 15
+
+      - name: Keep Alive & Log Info
         run: |
-          echo "Access your macOS via the Cloudflare URL above."
-          echo "VNC Password is: 123456"
-          # این دستور باعث می‌شود Runner بسته نشود (تا 6 ساعت)
-          sleep 21600 
+          echo "Password for VNC: 1234"
+          echo "Check the 'Start Web Tunnel' log for your public URL."
+          # نگه داشتن رانر برای استفاده (حداکثر 6 ساعت)
+          sleep 21600
           
