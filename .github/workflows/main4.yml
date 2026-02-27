@@ -1,0 +1,42 @@
+name: iOS/macOS Build on Hetzner M1
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build_on_mac:
+    # اینجا به جای ubuntu-latest، از لیبل سرور خودتان استفاده می‌کنید
+    runs-on: [self-hosted, mac-m1-hetzner]
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Environment
+        run: |
+          echo "شروع عملیات روی مک‌مینی فیزیکی هتزنر"
+          sw_vers # نمایش نسخه سیستم‌عامل مک
+          sysctl -n machdep.cpu.brand_string # نمایش مدل پردازنده (M1)
+
+      - name: Install Dependencies
+        run: |
+          # اگر از Homebrew استفاده می‌کنید
+          # brew install xcbeautify 
+          echo "Dependencies installed."
+
+      - name: Build Project
+        run: |
+          # مثال برای بیلد کردن یک پروژه Xcode
+          # xcodebuild -scheme YourScheme -archivePath build/YourApp.xcarchive archive
+          echo "Building the app..."
+
+      - name: Cleanup Workaround
+        if: always()
+        run: |
+          # چون هارد مک‌مینی هتزنر محدود است (256GB)، پاکسازی کش الزامی است
+          echo "Cleaning up build artifacts to save space..."
+          rm -rf ~/Library/Developer/Xcode/DerivedData/*
+          
