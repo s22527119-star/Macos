@@ -38,12 +38,7 @@ jobs:
       - name: Install AweSun Remote Desktop
         run: |
           echo "==== Downloading and Installing AweSun ===="
-          # دانلود پکیج رسمی AweSun برای مک
-          curl -L -o awesun.pkg "https://sun.aweray.com/download/macos" || brew install --cask awesun
-          # اگر با curl دانلود شد، آن را نصب می‌کنیم
-          if [ -f "awesun.pkg" ]; then
-            sudo installer -pkg awesun.pkg -target /
-          fi
+          brew install awesun
 
       # ۵. جلوگیری از خوابیدن سیستم
       - name: Prevent Sleep
