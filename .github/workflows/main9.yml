@@ -1,0 +1,73 @@
+name: Intel macOS with QEMU & AweSun
+
+on:
+  workflow_dispatch:
+
+jobs:
+  macos-awesun-virt:
+    runs-on: macos-26-intel # رانر اینتل برای پشتیبانی از QEMU
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # ۱. راه‌اندازی شبکه Tailscale (برای ورود اولیه با VNC)
+      - name: Install Tailscale
+        run: |
+          echo "==== Connecting to Tailscale ===="
+          brew install tailscale
+          sudo brew services start tailscale
+          sudo ln -s /opt/homebrew/bin/tailscale /usr/local/bin/tailscale || true
+          sudo tailscale up --authkey=${{ secrets.TAILSCALE_AUTHKEY }} --accept-routes
+
+      # ۲. فعال‌سازی VNC بومی (کلید ورود اولیه ما)
+      - name: Enable Apple VNC Backdoor
+        run: |
+          echo "==== Activating VNC for initial setup ===="
+          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -activate -configure -allowAccessFor -allUsers -privs -all
+          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -configure -clientopts -setvnclegacy yes -setvncpw -vncpw mac2026!
+          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -restart -agent
+
+      # ۳. نصب QEMU برای نیازهای مجازی‌سازی شما
+      - name: Install QEMU (Virtualization)
+        run: |
+          echo "==== Installing QEMU ===="
+          brew install qemu
+
+      # ۴. دانلود و نصب مستقیم AweSun
+      - name: Install AweSun Remote Desktop
+        run: |
+          echo "==== Downloading and Installing AweSun ===="
+          # دانلود پکیج رسمی AweSun برای مک
+          curl -L -o awesun.pkg "https://sun.aweray.com/download/macos" || brew install --cask awesun
+          # اگر با curl دانلود شد، آن را نصب می‌کنیم
+          if [ -f "awesun.pkg" ]; then
+            sudo installer -pkg awesun.pkg -target /
+          fi
+
+      # ۵. جلوگیری از خوابیدن سیستم
+      - name: Prevent Sleep
+        run: |
+          sudo caffeinate -u -t 7200 &
+
+      # ۶. راهنمای قدم به قدم برای شما
+      - name: Connection & Setup Guide
+        run: |
+          echo "================================================="
+          echo "🖥️ TAILSCALE IP: $(tailscale ip -4)"
+          echo "🔑 VNC PASSWORD: mac2026!"
+          echo "👤 USERNAME: $(whoami)"
+          echo "================================================="
+          echo "✅ قدم‌های شما برای راه‌اندازی AweSun:"
+          echo "۱. اول با یک برنامه VNC (مثل bVNC) به آی‌پی بالا وصل شوید."
+          echo "۲. در محیط مک، برنامه AweSun را از پوشه Applications باز کنید."
+          echo "۳. مک از شما دسترسی Screen Recording و Accessibility می‌خواهد؛ روی Open System Settings کلیک کنید و تیک AweSun را بزنید."
+          echo "۴. حالا در AweSun، مقدار Device ID و Passcode را یادداشت کنید."
+          echo "۵. از VNC خارج شوید و با نرم‌افزار AweSunِ گوشی‌تان مستقیماً با بالاترین سرعت وصل شوید!"
+          echo "================================================="
+          echo "🚀 QEMU نیز با موفقیت نصب شد و از طریق ترمینال در دسترس است."
+
+      # ۷. زنده نگه داشتن رانر
+      - name: Keep Runner Alive
+        run: sleep 7200
+        
